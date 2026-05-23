@@ -1,0 +1,41 @@
+# 语音输入法配置
+
+# 语音识别引擎配置
+asr:
+  engine: "paraformer"  # whisper / paraformer / local
+  model_size: "large"   # tiny/base/small/medium/large (whisper) 或 paraformer
+  language: "zh"        # zh / en / auto
+  sample_rate: 16000
+  chunk_size: 0.5       # 流式识别的音频块大小(秒)
+
+# 音频处理配置
+audio:
+  sample_rate: 16000
+  channels: 1
+  dtype: "int16"
+  vad_threshold: 0.5    # VAD检测阈值
+  noise_reduce: true    # 是否启用降噪
+
+# 自然语言处理配置
+nlp:
+  enable_punctuation: true   # 自动标点
+  enable_correction: true    # 智能纠错
+  enable_segmentation: true  # 智能断句
+
+# UI配置
+ui:
+  theme: "dark"
+  font_size: 14
+  show_waveform: true        # 显示音频波形
+  auto_copy: true            # 自动复制到剪贴板
+
+# 热词配置
+hotwords:
+  enabled: true
+  file: "config/hotwords.txt"
+
+# 性能配置
+performance:
+  max_concurrent: 2          # 最大并发识别数
+  cache_size: 100            # 缓存大小
+  timeout: 30                # 超时时间(秒)
