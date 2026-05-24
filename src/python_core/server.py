@@ -5,6 +5,7 @@
 
 import asyncio
 import json
+import threading
 import numpy as np
 from websockets.asyncio.server import serve
 
@@ -12,6 +13,7 @@ from audio.capture import AudioCapture
 from recognition.baidu_asr import BaiduASR
 from recognition.whisper_asr import recognize as whisper_recognize
 from recognition.whisper_asr import check_available as whisper_available
+from recognition.whisper_asr import load_model as whisper_load_model
 from command.parser import parse as parse_command
 
 
@@ -24,6 +26,16 @@ class VoiceServer:
         self._clients = set()
         self._running = False
         self._task = None
+        self._model_ready = False
+
+    def _ensure_model(self):
+        """延迟加载 Whisper 模型（首次使用时加载）"""
+        if not self._model_ready:
+            try:
+                whisper_load_model()
+                self._model_ready = True
+            except Exception as e:
+                raise RuntimeError(f"离线模型加载失败: {e}")
 
     async def start(self, host="127.0.0.1", port=8765):
         self._running = True
@@ -139,7 +151,8 @@ class VoiceServer:
             "data": {
                 "listening": self.capture._running,
                 "online_available": self.baidu.check_available(),
-                "offline_available": whisper_available(),
+                "offline_available": self._model_ready or whisper_available(),
+                "model_loading": not self._model_ready,
                 "language": self.language,
             }
         }
