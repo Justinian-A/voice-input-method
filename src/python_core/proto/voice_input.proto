@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package voice;
+
+service VoiceInput {
+    rpc StartRecognition (RecognitionConfig) returns (stream RecognitionResult);
+    rpc StopRecognition (StopRequest) returns (StopResponse);
+    rpc GetStatus (StatusRequest) returns (StatusResponse);
+    rpc UpdateSettings (SettingsRequest) returns (SettingsResponse);
+}
+
+message RecognitionConfig {
+    string language = 1;      // zh-CN, en-US, etc.
+    bool online = 2;          // true=online API, false=offline model
+    int32 sample_rate = 3;    // default 16000
+}
+
+message RecognitionResult {
+    string text = 1;          // recognized text
+    bool is_final = 2;        // is this the final result
+    float confidence = 3;     // 0.0-1.0
+    string error = 4;         // error message if any
+}
+
+message StopRequest {}
+message StopResponse {
+    bool success = 1;
+}
+
+message StatusRequest {}
+message StatusResponse {
+    bool listening = 1;
+    bool online_available = 2;
+    string current_language = 3;
+    float audio_level = 4;
+}
+
+message SettingsRequest {
+    string language = 1;
+    bool prefer_online = 2;
+    string api_key = 3;
+    string secret_key = 4;
+}
+
+message SettingsResponse {
+    bool success = 1;
+    string message = 2;
+}
