@@ -1,0 +1,36 @@
+# Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.spec
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models
+*.bin
+*.pt
+*.onnx
+whisper_models/
+
+# API Keys
+*.key
+credentials.json
+
+# Logs
+*.log
