@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/voice_service.dart';
 import 'settings_page.dart';
+import 'mic_test_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,6 +16,7 @@ class _HomePageState extends State<HomePage>
   final VoiceService _voiceService = VoiceService();
   late AnimationController _pulseController;
   bool _connected = false;
+  String _displayedText = '';
 
   @override
   void initState() {
@@ -28,14 +30,18 @@ class _HomePageState extends State<HomePage>
   }
 
   void _onStateChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final t = _voiceService.recognizedText;
+    if (t.isNotEmpty) {
+      _displayedText = t;
+    }
+    // 不因音量变化重建 —— VoiceService 已不在audio_level时通知
+    setState(() {});
   }
 
   Future<void> _connect() async {
     final ok = await _voiceService.connect();
-    if (mounted) {
-      setState(() => _connected = ok);
-    }
+    if (mounted) setState(() => _connected = ok);
   }
 
   void _toggleListening() {
@@ -43,17 +49,23 @@ class _HomePageState extends State<HomePage>
         _voiceService.state == VoiceState.processing) {
       _voiceService.stopListening();
     } else {
+      _displayedText = '';
       _voiceService.startListening();
     }
   }
 
   void _copyText() {
-    if (_voiceService.recognizedText.isNotEmpty) {
-      Clipboard.setData(ClipboardData(text: _voiceService.recognizedText));
+    if (_displayedText.isNotEmpty) {
+      Clipboard.setData(ClipboardData(text: _displayedText));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已复制到剪贴板'), duration: Duration(seconds: 1)),
       );
     }
+  }
+
+  void _clearText() {
+    _displayedText = '';
+    setState(() {});
   }
 
   Color _getStateColor() {
@@ -93,6 +105,18 @@ class _HomePageState extends State<HomePage>
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.hearing),
+            tooltip: '麦克风测试',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MicTestPage(voiceService: _voiceService),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.push(
@@ -122,8 +146,7 @@ class _HomePageState extends State<HomePage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 8,
-                    height: 8,
+                    width: 8, height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _connected ? Colors.green : Colors.red,
@@ -155,8 +178,7 @@ class _HomePageState extends State<HomePage>
                   child: GestureDetector(
                     onTap: _toggleListening,
                     child: Container(
-                      width: 80,
-                      height: 80,
+                      width: 80, height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _getStateColor(),
@@ -168,11 +190,7 @@ class _HomePageState extends State<HomePage>
                           ),
                         ],
                       ),
-                      child: Icon(
-                        _getStateIcon(),
-                        color: Colors.white,
-                        size: 40,
-                      ),
+                      child: Icon(_getStateIcon(), color: Colors.white, size: 40),
                     ),
                   ),
                 );
@@ -183,25 +201,28 @@ class _HomePageState extends State<HomePage>
 
             // 状态文字
             Text(
-              isListening ? '正在聆听...' : '点击开始语音输入',
+              isListening ? '正在聆听... 点击停止' : '点击开始语音输入',
               style: TextStyle(
                 fontSize: 16,
                 color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
 
-            // 音量指示器
+            // 音量指示器——独立监听，不触发整页rebuild
             if (isListening) ...[
               const SizedBox(height: 16),
               SizedBox(
                 width: 200,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: _voiceService.audioLevel,
-                    minHeight: 6,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _voiceService.audioLevelNotifier,
+                  builder: (_, level, __) => ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: level,
+                      minHeight: 6,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
                   ),
                 ),
               ),
@@ -209,42 +230,60 @@ class _HomePageState extends State<HomePage>
 
             const Spacer(),
 
-            // 识别结果区域
-            if (_voiceService.recognizedText.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
+            // 文字显示区——固定位置，避免条件渲染导致的布局跳动
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.all(_displayedText.isNotEmpty ? 16 : 0),
                 decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withAlpha(120),
+                  color: _displayedText.isNotEmpty
+                      ? Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withAlpha(120)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      _voiceService.recognizedText,
-                      style: const TextStyle(fontSize: 18),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _copyText,
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text('复制文本'),
-                    ),
-                  ],
-                ),
+                child: _displayedText.isNotEmpty
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _displayedText,
+                            style: const TextStyle(fontSize: 18),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _copyText,
+                                icon: const Icon(Icons.copy, size: 16),
+                                label: const Text('复制'),
+                              ),
+                              const SizedBox(width: 12),
+                              OutlinedButton.icon(
+                                onPressed: _clearText,
+                                icon: const Icon(Icons.clear, size: 16),
+                                label: const Text('清除'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
               ),
+            ),
 
             const Spacer(),
 
-            // 底部提示
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                '按 Ctrl+Shift+V 开始/停止语音输入',
+                '点击麦克风开始/停止录音',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,

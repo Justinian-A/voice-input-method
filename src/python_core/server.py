@@ -18,9 +18,9 @@ from command.parser import parse as parse_command
 
 
 class VoiceServer:
-    def __init__(self):
-        self.capture = AudioCapture()
-        self.baidu = BaiduASR()
+    def __init__(self, api_key: str = "", secret_key: str = "", device_index: int = None, sample_rate: int = 16000):
+        self.capture = AudioCapture(device_index=device_index, sample_rate=sample_rate)
+        self.baidu = BaiduASR(api_key=api_key, secret_key=secret_key)
         self.online_available = True
         self.language = "zh-CN"
         self._clients = set()
@@ -82,45 +82,32 @@ class VoiceServer:
 
     async def _recognition_loop(self, ws, prefer_online: bool):
         try:
+            accumulated = b""
             while self.capture._running:
-                # 每隔1秒发送一次音频到识别引擎
-                audio_bytes = self.capture.read_accumulated(1.0)
-                if not audio_bytes:
-                    await asyncio.sleep(0.1)
-                    continue
+                # 快速读取所有可用音频
+                chunk = self.capture.read_all()
+                if chunk:
+                    accumulated += chunk
 
-                # 发送音量级别
                 level = self.capture.get_audio_level()
                 await ws.send(json.dumps({
                     "event": "audio_level",
                     "data": {"level": level}
                 }))
 
-                result = await self._recognize(audio_bytes, prefer_online)
+                # 累积1秒音频后识别
+                min_bytes = int(16000 * 1.0 * 2)
+                if len(accumulated) < min_bytes:
+                    await asyncio.sleep(0.1)
+                    continue
 
-                if result and result.get("text"):
-                    # 检查是否为语音命令
-                    cmd = parse_command(result["text"])
-                    if cmd:
-                        await ws.send(json.dumps({
-                            "event": "command",
-                            "data": cmd
-                        }))
-                    else:
-                        await ws.send(json.dumps({
-                            "event": "text",
-                            "data": {
-                                "text": result["text"],
-                                "confidence": result["confidence"],
-                                "is_final": result["is_final"],
-                            }
-                        }))
+                audio_bytes = accumulated
+                accumulated = b""
+                await self._send_recognition(ws, audio_bytes, prefer_online)
 
-                if result and result.get("error"):
-                    await ws.send(json.dumps({
-                        "event": "error",
-                        "data": {"message": result["error"]}
-                    }))
+            # 停止前处理剩余音频
+            if len(accumulated) >= 8000:
+                await self._send_recognition(ws, accumulated, prefer_online)
 
         except Exception as e:
             await ws.send(json.dumps({
@@ -129,6 +116,27 @@ class VoiceServer:
             }))
         finally:
             self._stop_recognition()
+
+    async def _send_recognition(self, ws, audio_bytes, prefer_online):
+        result = await self._recognize(audio_bytes, prefer_online)
+        if result and result.get("text"):
+            cmd = parse_command(result["text"])
+            if cmd:
+                await ws.send(json.dumps({"event": "command", "data": cmd}))
+            else:
+                await ws.send(json.dumps({
+                    "event": "text",
+                    "data": {
+                        "text": result["text"],
+                        "confidence": result["confidence"],
+                        "is_final": result["is_final"],
+                    }
+                }))
+        if result and result.get("error"):
+            await ws.send(json.dumps({
+                "event": "error",
+                "data": {"message": result["error"]}
+            }))
 
     async def _recognize(self, audio_bytes: bytes, prefer_online: bool) -> dict | None:
         """选择在线或离线识别"""
@@ -168,11 +176,70 @@ class VoiceServer:
             self.language = msg["language"]
 
 
+def _detect_mic():
+    """自动检测最可靠的麦克风设备，返回 (device_index, sample_rate)
+    使用平均音量而非峰值来避免脉冲噪音被误判"""
+    try:
+        import pyaudio, numpy as np
+        p = pyaudio.PyAudio()
+        best = None  # (device, rate, avg_volume)
+        for i in range(p.get_device_count()):
+            info = p.get_device_info_by_index(i)
+            if info['maxInputChannels'] == 0:
+                continue
+            for rate in (16000, 44100):
+                try:
+                    stream = p.open(format=pyaudio.paInt16, channels=1, rate=rate,
+                                  input=True, input_device_index=i,
+                                  frames_per_buffer=rate // 10)
+                    vols = []
+                    for _ in range(20):
+                        data = stream.read(rate // 10, exception_on_overflow=False)
+                        vol = int(np.max(np.abs(np.frombuffer(data, dtype=np.int16))) / 32768.0 * 100)
+                        vols.append(vol)
+                    stream.stop_stream()
+                    stream.close()
+                    avg_vol = sum(vols) / len(vols)
+                    # 需要平均音量 > 10% 才认为是有效语音设备
+                    if avg_vol > 10:
+                        p.terminate()
+                        return (i, rate)
+                    # 记录备选
+                    if avg_vol > 3 and (best is None or avg_vol > best[2]):
+                        best = (i, rate, avg_vol)
+                except Exception:
+                    continue
+        p.terminate()
+        if best:
+            return (best[0], best[1])
+    except Exception as e:
+        print(f"设备检测异常: {e}")
+    return None
+
 def main():
-    import sys
-    host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
-    server = VoiceServer()
+    import os, sys
+    host = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("YUSHENG_HOST", "127.0.0.1")
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else int(os.environ.get("YUSHENG_PORT", "8765"))
+    api_key = os.environ.get("YUSHENG_API_KEY", "")
+    secret_key = os.environ.get("YUSHENG_SECRET_KEY", "")
+
+    device_index = None
+    sample_rate = 16000
+    device_str = os.environ.get("YUSHENG_DEVICE")
+    if device_str:
+        device_index = int(device_str)
+        print(f"使用指定麦克风: [{device_index}]")
+    else:
+        result = _detect_mic()
+        if result:
+            device_index, sample_rate = result
+            print(f"自动检测麦克风: [{device_index}] @ {sample_rate}Hz")
+        else:
+            print("警告: 未检测到可用麦克风")
+
+    server = VoiceServer(api_key=api_key, secret_key=secret_key,
+                         device_index=device_index,
+                         sample_rate=sample_rate)
     asyncio.run(server.start(host, port))
 
 

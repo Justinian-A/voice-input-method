@@ -25,7 +25,17 @@
       "Bash(/d/dev/flutter/bin/flutter.bat --version)",
       "Bash(/d/python/python.exe *)",
       "Bash(taskkill //f //im python.exe)",
-      "Bash(rm -f \"/c/Users/Lenovo/.cache/whisper/base.pt\")"
+      "Bash(rm -f \"/c/Users/Lenovo/.cache/whisper/base.pt\")",
+      "Bash(taskkill //f //im yu_sheng.exe)",
+      "Bash(export YUSHENG_API_KEY=\"VGpEn5TakDr68iU9Ted3yWHS\")",
+      "Bash(export YUSHENG_SECRET_KEY=\"YO3hv9rRpmRoo3dsFnoFLBNdSXnLtL3v\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8765)",
+      "Bash(/d/qiniu/src/flutter_app/build/windows/x64/runner/Debug/yu_sheng.exe)",
+      "Bash(/d/python/python.exe server.py)",
+      "Bash(export YUSHENG_DEVICE=\"5\")",
+      "Bash(cat /tmp/yusheng.log)",
+      "Bash(netstat -ano)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

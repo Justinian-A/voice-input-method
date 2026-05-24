@@ -17,10 +17,11 @@ class VoiceService extends ChangeNotifier {
   bool _preferOnline = true;
   String _serverHost = '127.0.0.1';
   int _serverPort = 8765;
-
-  // Settings
   String _baiduApiKey = '';
   String _baiduSecretKey = '';
+
+  // 高频音量用独立Notifier，不触发全量rebuild
+  final ValueNotifier<double> audioLevelNotifier = ValueNotifier(0.0);
 
   VoiceState get state => _state;
   String get recognizedText => _recognizedText;
@@ -46,42 +47,25 @@ class VoiceService extends ChangeNotifier {
   void setApiKeys(String key, String secret) {
     _baiduApiKey = key;
     _baiduSecretKey = secret;
-    _sendCommand('update_settings', {
-      'api_key': key,
-      'secret_key': secret,
-    });
+    _sendCommand('update_settings', {'api_key': key, 'secret_key': secret});
   }
 
-  void setLanguage(String lang) {
-    _language = lang;
-  }
-
-  void setPreferOnline(bool online) {
-    _preferOnline = online;
-  }
+  void setLanguage(String lang) => _language = lang;
+  void setPreferOnline(bool online) => _preferOnline = online;
 
   Future<bool> connect() async {
     try {
-      final uri = Uri(
-        scheme: 'ws',
-        host: _serverHost,
-        port: _serverPort,
-      );
+      final uri = Uri(scheme: 'ws', host: _serverHost, port: _serverPort);
       _channel = WebSocketChannel.connect(uri);
       await _channel!.ready;
-
-      _channel!.stream.listen(
-        _handleMessage,
-        onError: (error) {
-          _state = VoiceState.error;
-          _errorMessage = '连接错误: $error';
-          notifyListeners();
-        },
-        onDone: () {
-          _state = VoiceState.idle;
-          notifyListeners();
-        },
-      );
+      _channel!.stream.listen(_handleMessage, onError: (error) {
+        _state = VoiceState.error;
+        _errorMessage = '连接错误: $error';
+        notifyListeners();
+      }, onDone: () {
+        _state = VoiceState.idle;
+        notifyListeners();
+      });
       return true;
     } catch (e) {
       _errorMessage = '无法连接到服务: $e';
@@ -97,19 +81,16 @@ class VoiceService extends ChangeNotifier {
       switch (event) {
         case 'audio_level':
           _audioLevel = (msg['data']?['level'] ?? 0.0).toDouble();
+          audioLevelNotifier.value = _audioLevel; // 独立通知，不触发rebuild
           if (_state == VoiceState.listening) {
             _state = VoiceState.processing;
           }
-          break;
+          return; // IMPORTANT: 不调用notifyListeners
         case 'text':
           _recognizedText = msg['data']?['text'] ?? '';
-          _state = VoiceState.idle;
-          // 自动复制到剪贴板供用户粘贴
           break;
         case 'command':
-          final cmd = msg['data'];
-          _commandController.add(jsonEncode(cmd));
-          _recognizedText = '';
+          _commandController.add(jsonEncode(msg['data']));
           break;
         case 'error':
           _errorMessage = msg['data']?['message'] ?? '未知错误';
@@ -119,13 +100,10 @@ class VoiceService extends ChangeNotifier {
           _offlineAvailable = msg['data']?['offline_available'] ?? false;
           break;
         case 'stopped':
-          _state = VoiceState.idle;
           break;
       }
-      notifyListeners();
-    } catch (_) {
-      // 忽略解析错误
-    }
+      notifyListeners(); // 只在有意义的事件时rebuild
+    } catch (_) {}
   }
 
   void startListening() {
@@ -133,10 +111,7 @@ class VoiceService extends ChangeNotifier {
     _state = VoiceState.listening;
     _recognizedText = '';
     _errorMessage = '';
-    _sendCommand('start_recognition', {
-      'language': _language,
-      'online': _preferOnline,
-    });
+    _sendCommand('start_recognition', {'language': _language, 'online': _preferOnline});
     notifyListeners();
   }
 
@@ -146,16 +121,27 @@ class VoiceService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void startMicTest() {
+    if (_channel == null) return;
+    _state = VoiceState.listening;
+    _sendCommand('start_recognition', {'language': 'zh-CN', 'online': false});
+    notifyListeners();
+  }
+
+  void stopMicTest() {
+    _state = VoiceState.idle;
+    _sendCommand('stop_recognition', {});
+    notifyListeners();
+  }
+
   void _sendCommand(String command, Map<String, dynamic> data) {
-    _channel?.sink.add(jsonEncode({
-      'command': command,
-      ...data,
-    }));
+    _channel?.sink.add(jsonEncode({'command': command, ...data}));
   }
 
   @override
   void dispose() {
     _commandController.close();
+    audioLevelNotifier.dispose();
     _channel?.sink.close();
     super.dispose();
   }
