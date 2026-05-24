@@ -11,7 +11,7 @@ import base64
 class BaiduASR:
     """百度语音识别客户端"""
 
-    API_URL = "https://vop.baidu.com/pro_api"
+    API_URL = "https://vop.baidu.com/server_api"
     TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 
     def __init__(self, api_key: str = "", secret_key: str = ""):
