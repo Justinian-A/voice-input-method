@@ -79,15 +79,7 @@ python src/main.py
 - `enable_correction`: 是否启用智能纠错
 - `stream_mode`: 是否启用流式识别
 
-## 开发计划
 
-- [x] 项目初始化
-- [ ] 音频采集与预处理
-- [ ] ASR 引擎集成
-- [ ] NLP 后处理
-- [ ] 桌面端 UI
-- [ ] 热词定制
-- [ ] 多语言支持
 
 ## 许可证
 
