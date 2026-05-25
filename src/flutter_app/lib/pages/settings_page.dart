@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/voice_service.dart';
+import '../services/theme_service.dart';
 
 class SettingsPage extends StatefulWidget {
   final VoiceService voiceService;
-  const SettingsPage({super.key, required this.voiceService});
+  final ThemeService themeService;
+  const SettingsPage({super.key, required this.voiceService, required this.themeService});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -47,6 +49,22 @@ class _SettingsPageState extends State<SettingsPage> {
                 DropdownMenuItem(value: 'zh-CN', child: Text('中文')),
                 DropdownMenuItem(value: 'en-US', child: Text('English')),
                 DropdownMenuItem(value: 'yue', child: Text('粤语')),
+              ],
+            ),
+          ),
+          ListTile(
+            title: const Text('输出文字'),
+            subtitle: const Text('离线识别时的文字输出形式'),
+            trailing: DropdownButton<String>(
+              value: widget.voiceService.script,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => widget.voiceService.setScript(val));
+                }
+              },
+              items: const [
+                DropdownMenuItem(value: 'simplified', child: Text('简体中文')),
+                DropdownMenuItem(value: 'traditional', child: Text('繁體中文')),
               ],
             ),
           ),
@@ -123,6 +141,30 @@ class _SettingsPageState extends State<SettingsPage> {
               );
             },
             child: const Text('保存连接设置'),
+          ),
+
+          const Divider(),
+
+          // 主题设置
+          _buildSection('外观'),
+          ListTile(
+            title: const Text('主题模式'),
+            leading: Icon(
+              widget.themeService.mode == ThemeMode.dark
+                  ? Icons.dark_mode
+                  : widget.themeService.mode == ThemeMode.light
+                      ? Icons.light_mode
+                      : Icons.brightness_auto,
+            ),
+            trailing: SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
+                ButtonSegment(value: ThemeMode.system, label: Text('系统')),
+                ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
+              ],
+              selected: {widget.themeService.mode},
+              onSelectionChanged: (vals) => widget.themeService.setMode(vals.first),
+            ),
           ),
 
           const Divider(),

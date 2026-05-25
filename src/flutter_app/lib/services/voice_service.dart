@@ -15,6 +15,7 @@ class VoiceService extends ChangeNotifier {
   bool _offlineAvailable = false;
   String _language = 'zh-CN';
   bool _preferOnline = true;
+  String _script = 'simplified';
   String _serverHost = '127.0.0.1';
   int _serverPort = 8765;
   String _baiduApiKey = '';
@@ -48,6 +49,13 @@ class VoiceService extends ChangeNotifier {
     _baiduApiKey = key;
     _baiduSecretKey = secret;
     _sendCommand('update_settings', {'api_key': key, 'secret_key': secret});
+  }
+
+  String get script => _script;
+
+  void setScript(String s) {
+    _script = s;
+    _sendCommand('update_settings', {'script': s});
   }
 
   void setLanguage(String lang) => _language = lang;
@@ -111,7 +119,7 @@ class VoiceService extends ChangeNotifier {
     _state = VoiceState.listening;
     _recognizedText = '';
     _errorMessage = '';
-    _sendCommand('start_recognition', {'language': _language, 'online': _preferOnline});
+    _sendCommand('start_recognition', {'language': _language, 'online': _preferOnline, 'script': _script});
     notifyListeners();
   }
 
@@ -124,7 +132,7 @@ class VoiceService extends ChangeNotifier {
   void startMicTest() {
     if (_channel == null) return;
     _state = VoiceState.listening;
-    _sendCommand('start_recognition', {'language': 'zh-CN', 'online': false});
+    _sendCommand('start_recognition', {'language': 'zh-CN', 'online': false, 'script': _script});
     notifyListeners();
   }
 

@@ -6,7 +6,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| 接口地址 | https://vop.baidu.com/pro_api |
+| 接口地址 | https://vop.baidu.com/server_api |
 | 认证方式 | Access Token (OAuth 2.0) |
 | 音频格式 | PCM 16kHz 16bit 单声道 |
 | 支持语言 | 中文普通话、粤语、四川话等 |
@@ -22,7 +22,7 @@ POST https://aip.baidubce.com/oauth/2.0/token
 
 2. 语音识别请求
 ```
-POST https://vop.baidu.com/pro_api
+POST https://vop.baidu.com/server_api
 参数：
   - dev_pid: 语言模型ID（1537=普通话）
   - format: pcm

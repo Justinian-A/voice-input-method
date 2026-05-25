@@ -11,7 +11,8 @@ import base64
 class BaiduASR:
     """百度语音识别客户端"""
 
-    API_URL = "https://vop.baidu.com/server_api"
+    PRO_API_URL = "https://vop.baidu.com/pro_api"
+    SERVER_API_URL = "https://vop.baidu.com/server_api"
     TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 
     def __init__(self, api_key: str = "", secret_key: str = ""):
@@ -44,10 +45,10 @@ class BaiduASR:
         self._token_expire = now + data.get("expires_in", 86400)
         return self._token
 
-    def recognize(self, audio_data: bytes, language: str = "zh") -> dict:
+    def recognize(self, audio_data: bytes, language: str = "zh", sample_rate: int = 16000) -> dict:
         """
         识别短语音（≤60秒）
-        dev_pid: 1537=普通话, 1737=英语, 1637=粤语, 1837=四川话
+        优先使用高精度模型(pro_api)，失败则回退到标准模型
         """
         lang_map = {
             "zh": 1537, "zh-CN": 1537,
@@ -58,9 +59,9 @@ class BaiduASR:
 
         token = self._get_token()
         params = {
-            "dev_pid": dev_pid,
+            "dev_pid": 80001,
             "format": "pcm",
-            "rate": 16000,
+            "rate": sample_rate,
             "channel": 1,
             "token": token,
             "cuid": "yusheng_input",
@@ -68,8 +69,15 @@ class BaiduASR:
             "len": len(audio_data),
         }
 
-        resp = requests.post(self.API_URL, json=params, timeout=15)
+        # 先尝试高精度模型
+        resp = requests.post(self.PRO_API_URL, json=params, timeout=15)
         result = resp.json()
+
+        # 高精度模型不可用时回退到标准模型
+        if result.get("err_no") != 0:
+            params["dev_pid"] = dev_pid
+            resp = requests.post(self.SERVER_API_URL, json=params, timeout=15)
+            result = resp.json()
 
         if result.get("err_no") == 0:
             return {

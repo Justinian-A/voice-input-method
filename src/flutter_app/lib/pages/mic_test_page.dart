@@ -18,6 +18,11 @@ class _MicTestPageState extends State<MicTestPage> {
   void initState() {
     super.initState();
     widget.voiceService.audioLevelNotifier.addListener(_onLevel);
+    widget.voiceService.addListener(_onServiceChange);
+  }
+
+  void _onServiceChange() {
+    setState(() {}); // 状态变化时刷新UI
   }
 
   void _onLevel() {
@@ -155,6 +160,7 @@ class _MicTestPageState extends State<MicTestPage> {
   @override
   void dispose() {
     widget.voiceService.audioLevelNotifier.removeListener(_onLevel);
+    widget.voiceService.removeListener(_onServiceChange);
     super.dispose();
   }
 }
